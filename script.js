@@ -238,7 +238,7 @@ class SixMensMorrisUI {
                     const millFormed = await this.checkMill(x, y, this.gameState.currentPlayer);
                     if (millFormed) {
                         this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} formed a mill! Remove an opponent's piece.`, 'info');
-                        await this.handleMillRemoval();
+                        await this.handleMillRemoval(this.gameState.currentPlayer);
                     } else {
                         // Check for win
                         const win = await this.checkWin();
@@ -252,7 +252,7 @@ class SixMensMorrisUI {
                         this.updateUI();
                     }
                 } else {
-                    this.showMessage('Invalid placement. Try again.', 'error');
+                    // Don't show error message for failed placement - might be normal game state
                 }
             } else {
                 this.showMessage('Invalid placement. Try again.', 'error');
@@ -284,7 +284,7 @@ class SixMensMorrisUI {
                         const millFormed = await this.checkMill(x, y, this.gameState.currentPlayer);
                         if (millFormed) {
                             this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} formed a mill! Remove an opponent's piece.`, 'info');
-                            await this.handleMillRemoval();
+                            await this.handleMillRemoval(this.gameState.currentPlayer);
                         } else {
                             // Check for win
                             const win = await this.checkWin();
@@ -336,7 +336,7 @@ class SixMensMorrisUI {
         }
     }
 
-    async handleMillRemoval() {
+    async handleMillRemoval(playerWhoFormedMill) {
         // For simplicity, we'll let the user click on opponent pieces to remove them
         // In a full implementation, you'd want to highlight removable pieces
         this.showMessage('Click on an opponent piece to remove it.', 'info');
@@ -347,14 +347,14 @@ class SixMensMorrisUI {
             const y = parseInt(position.dataset.y);
             
             // Check if this position has an opponent's piece
-            const isOpponentPiece = (this.gameState.currentPlayer === 'W' && position.classList.contains('black')) ||
-                                   (this.gameState.currentPlayer === 'B' && position.classList.contains('white'));
+            const isOpponentPiece = (playerWhoFormedMill === 'W' && position.classList.contains('black')) ||
+                                   (playerWhoFormedMill === 'B' && position.classList.contains('white'));
             
             if (isOpponentPiece) {
                 position.style.cursor = 'pointer';
                 position.addEventListener('click', async () => {
                     try {
-                        const response = await fetch(`/remove_piece?x=${x}&y=${y}&player=${this.gameState.currentPlayer}`, {
+                        const response = await fetch(`/remove_piece?x=${x}&y=${y}&player=${playerWhoFormedMill}`, {
                             method: 'POST'
                         });
 
@@ -382,6 +382,9 @@ class SixMensMorrisUI {
                                 
                                 // Clear any mill removal state and reset board interactions
                                 this.clearMillRemovalState();
+                                
+                                // Clear the mill removal instruction message
+                                this.showMessage('', 'info');
                             } else {
                                 this.showMessage('Invalid piece to remove. Try again.', 'error');
                             }
