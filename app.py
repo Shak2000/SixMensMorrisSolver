@@ -74,3 +74,28 @@ async def has_valid_moves(player: str):
 @app.post("/undo")
 async def undo():
     game.undo()
+
+
+@app.get("/get_unblocked_two_in_a_rows")
+async def get_unblocked_two_in_a_rows(player: str):
+    return game.get_unblocked_two_in_a_rows(player)
+
+
+@app.get("/evaluate")
+async def evaluate():
+    return game.evaluate_for_player()
+
+
+@app.get("/minimax")
+async def minimax(depth: int, alpha: int, beta: int, maximizing_player: bool):
+    return game.minimax(depth, alpha, beta, maximizing_player)
+
+
+@app.post("/computer_move")
+async def computer_move(depth: int):
+    game.computer_move(depth)
+
+
+@app.post("/remove_best_opponent_piece")
+async def remove_best_opponent_piece(depth: int):
+    game.remove_best_opponent_piece(depth)

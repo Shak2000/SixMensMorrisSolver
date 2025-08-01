@@ -806,6 +806,7 @@ def main():
                                     print("Invalid piece to remove. Try again.")
                         
                         if game.check_win():
+                            game.display_board()
                             print(f"{game.player} wins!")
                             game.game_active = False
                         else:
@@ -830,6 +831,7 @@ def main():
                                     print("Invalid piece to remove. Try again.")
                         
                         if game.check_win():
+                            game.display_board()
                             print(f"{game.player} wins!")
                             game.game_active = False
                         else:
@@ -851,6 +853,7 @@ def main():
                 
                 game.computer_move(depth)
                 if game.check_win():
+                    game.display_board()
                     print(f"{game.player} wins!")
                     game.game_active = False
                 else:
