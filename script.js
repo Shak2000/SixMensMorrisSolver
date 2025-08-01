@@ -9,7 +9,8 @@ class SixMensMorrisUI {
             whiteRemoved: 0,
             blackRemoved: 0,
             placed: 0,
-            gameActive: false
+            gameActive: false,
+            victor: null
         };
         this.boardPositions = [];
         this.validPositions = [
@@ -36,6 +37,7 @@ class SixMensMorrisUI {
         this.gameState.blackCount = 0;
         this.gameState.currentPlayer = 'W';
         this.gameState.phase = 'placement';
+        this.gameState.victor = null;
         
         // Show welcome screen, hide game elements
         document.getElementById('welcome-screen').style.display = 'flex';
@@ -51,6 +53,7 @@ class SixMensMorrisUI {
         try {
             await fetch('/start', { method: 'POST' });
             this.gameState.gameActive = true; // Set game as active
+            this.gameState.victor = null; // Reset victor state
             await this.updateGameState();
             this.selectedPosition = null;
             
@@ -73,6 +76,7 @@ class SixMensMorrisUI {
         try {
             await fetch('/start', { method: 'POST' });
             this.gameState.gameActive = true;
+            this.gameState.victor = null; // Reset victor state
             await this.updateGameState();
             this.selectedPosition = null;
             
@@ -211,6 +215,11 @@ class SixMensMorrisUI {
 
     async handlePositionClick(x, y) {
         try {
+            // Don't allow actions if there's a victor
+            if (this.gameState.victor) {
+                return;
+            }
+            
             if (this.gameState.phase === 'placement') {
                 await this.handlePlacement(x, y);
             } else {
@@ -243,7 +252,7 @@ class SixMensMorrisUI {
                         // Check for win
                         const win = await this.checkWin();
                         if (win) {
-                            this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} wins!`, 'success');
+                            this.handleVictory(this.gameState.currentPlayer);
                             this.updateBoardDisplay();
                             return;
                         }
@@ -289,7 +298,7 @@ class SixMensMorrisUI {
                             // Check for win
                             const win = await this.checkWin();
                             if (win) {
-                                this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} wins!`, 'success');
+                                this.handleVictory(this.gameState.currentPlayer);
                                 this.updateBoardDisplay();
                                 return;
                             }
@@ -373,7 +382,7 @@ class SixMensMorrisUI {
                                 // Check for win
                                 const win = await this.checkWin();
                                 if (win) {
-                                    this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} wins!`, 'success');
+                                    this.handleVictory(this.gameState.currentPlayer);
                                     this.updateBoardDisplay();
                                     return;
                                 }
@@ -400,6 +409,11 @@ class SixMensMorrisUI {
     }
 
     async makeComputerMove() {
+        // Don't allow computer moves if there's a victor
+        if (this.gameState.victor) {
+            return;
+        }
+        
         const depth = parseInt(document.getElementById('ai-depth').value) || 3;
         
         try {
@@ -417,7 +431,7 @@ class SixMensMorrisUI {
                 // Check for win
                 const win = await this.checkWin();
                 if (win) {
-                    this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} wins!`, 'success');
+                    this.handleVictory(this.gameState.currentPlayer);
                     this.updateBoardDisplay();
                     return;
                 }
@@ -540,19 +554,26 @@ class SixMensMorrisUI {
         const undoButton = document.getElementById('undo-move');
         const computerButton = document.getElementById('computer-move');
         
-        console.log('Updating button states. Game active:', this.gameState.gameActive);
+        console.log('Updating button states. Game active:', this.gameState.gameActive, 'Victor:', this.gameState.victor);
         
-        // Show buttons when game is active (not when pieces are placed)
-        if (this.gameState.gameActive) {
+        if (this.gameState.victor) {
+            // Victory state - only show restart and undo buttons
+            restartButton.style.display = 'inline-block';
+            undoButton.style.display = 'inline-block';
+            computerButton.style.display = 'none';
+            console.log('Victory state - only restart and undo buttons active');
+        } else if (this.gameState.gameActive) {
+            // Normal game state - show all buttons
             restartButton.style.display = 'inline-block';
             undoButton.style.display = 'inline-block';
             computerButton.style.display = 'inline-block';
-            console.log('Showing game buttons');
+            console.log('Normal game state - all buttons active');
         } else {
+            // No game active - hide all buttons
             restartButton.style.display = 'none';
             undoButton.style.display = 'none';
             computerButton.style.display = 'none';
-            console.log('Hiding game buttons');
+            console.log('No game active - hiding all buttons');
         }
     }
 
@@ -560,6 +581,29 @@ class SixMensMorrisUI {
         const messageElement = document.getElementById('game-message');
         messageElement.textContent = message;
         messageElement.className = `message ${type}`;
+    }
+
+    handleVictory(winner) {
+        this.gameState.victor = winner;
+        this.gameState.gameActive = false;
+        
+        const winnerName = winner === 'W' ? 'White' : 'Black';
+        this.showMessage(`🎉 ${winnerName} wins the game! 🎉`, 'success');
+        
+        // Update button states for victory
+        this.updateButtonStates();
+        
+        // Disable board interactions
+        this.disableBoardInteractions();
+    }
+
+    disableBoardInteractions() {
+        // Remove click event listeners from all board positions
+        this.boardPositions.forEach(position => {
+            const newPosition = position.cloneNode(true);
+            position.parentNode.replaceChild(newPosition, position);
+            // Don't re-add event listeners
+        });
     }
 
     // API helper methods
