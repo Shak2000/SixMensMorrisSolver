@@ -228,48 +228,8 @@ class SixMensMorrisUI {
             });
 
             if (response.ok) {
-                await this.updateGameState();
-                this.updateBoardDisplay();
-                this.updateButtonStates();
-                
-                // Check for mill formation
-                const millFormed = await this.checkMill(x, y, this.gameState.currentPlayer);
-                if (millFormed) {
-                    this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} formed a mill! Remove an opponent's piece.`, 'info');
-                    await this.handleMillRemoval();
-                } else {
-                    // Check for win
-                    const win = await this.checkWin();
-                    if (win) {
-                        this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} wins!`, 'success');
-                        this.updateBoardDisplay();
-                        return;
-                    }
-                    
-                    // Switch player
-                    await fetch('/switch', { method: 'POST' });
-                    this.gameState.currentPlayer = this.gameState.currentPlayer === 'W' ? 'B' : 'W';
-                    this.updateUI();
-                }
-            } else {
-                this.showMessage('Invalid placement. Try again.', 'error');
-            }
-        } catch (error) {
-            this.showMessage('Error placing piece: ' + error.message, 'error');
-        }
-    }
-
-    async handleMovement(x, y) {
-        if (this.selectedPosition) {
-            // This is a destination click
-            const [srcX, srcY] = this.selectedPosition;
-            try {
-                const response = await fetch(`/move?x=${srcX}&y=${srcY}&nx=${x}&ny=${y}`, {
-                    method: 'POST'
-                });
-
-                if (response.ok) {
-                    this.clearSelection();
+                const success = await response.json();
+                if (success) {
                     await this.updateGameState();
                     this.updateBoardDisplay();
                     this.updateButtonStates();
@@ -288,10 +248,58 @@ class SixMensMorrisUI {
                             return;
                         }
                         
-                        // Switch player
-                        await fetch('/switch', { method: 'POST' });
-                        this.gameState.currentPlayer = this.gameState.currentPlayer === 'W' ? 'B' : 'W';
+                        // Player already switched in backend, just update UI
                         this.updateUI();
+                    }
+                } else {
+                    this.showMessage('Invalid placement. Try again.', 'error');
+                }
+            } else {
+                this.showMessage('Invalid placement. Try again.', 'error');
+            }
+        } catch (error) {
+            this.showMessage('Error placing piece: ' + error.message, 'error');
+        }
+    }
+
+    async handleMovement(x, y) {
+        if (this.selectedPosition) {
+            // This is a destination click
+            const [srcX, srcY] = this.selectedPosition;
+            console.log(`Attempting move from (${srcX}, ${srcY}) to (${x}, ${y})`);
+            try {
+                const response = await fetch(`/move?x=${srcX}&y=${srcY}&nx=${x}&ny=${y}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const success = await response.json();
+                    if (success) {
+                        this.clearSelection();
+                        await this.updateGameState();
+                        this.updateBoardDisplay();
+                        this.updateButtonStates();
+                        
+                        // Check for mill formation
+                        const millFormed = await this.checkMill(x, y, this.gameState.currentPlayer);
+                        if (millFormed) {
+                            this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} formed a mill! Remove an opponent's piece.`, 'info');
+                            await this.handleMillRemoval();
+                        } else {
+                            // Check for win
+                            const win = await this.checkWin();
+                            if (win) {
+                                this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} wins!`, 'success');
+                                this.updateBoardDisplay();
+                                return;
+                            }
+                            
+                            // Player already switched in backend, just update UI
+                            this.updateUI();
+                        }
+                    } else {
+                        this.showMessage('Invalid move. Try again.', 'error');
+                        this.clearSelection();
                     }
                 } else {
                     this.showMessage('Invalid move. Try again.', 'error');
@@ -307,7 +315,18 @@ class SixMensMorrisUI {
                 parseInt(p.dataset.x) === x && parseInt(p.dataset.y) === y
             );
             
-            if (position && position.classList.contains(this.gameState.currentPlayer.toLowerCase())) {
+            console.log(`Click at (${x}, ${y}), current player: ${this.gameState.currentPlayer}`);
+            console.log('Position found:', position);
+            if (position) {
+                console.log('Position classes:', position.classList.toString());
+            }
+            
+            // Check if the position has a piece and if it belongs to the current player
+            if (position && position.classList.contains('white') && this.gameState.currentPlayer === 'W') {
+                this.selectedPosition = [x, y];
+                this.updateBoardDisplay();
+                this.showMessage('Select destination position.', 'info');
+            } else if (position && position.classList.contains('black') && this.gameState.currentPlayer === 'B') {
                 this.selectedPosition = [x, y];
                 this.updateBoardDisplay();
                 this.showMessage('Select destination position.', 'info');
@@ -326,9 +345,12 @@ class SixMensMorrisUI {
         this.boardPositions.forEach(position => {
             const x = parseInt(position.dataset.x);
             const y = parseInt(position.dataset.y);
-            const piece = position.textContent;
             
-            if (piece && piece !== this.gameState.currentPlayer) {
+            // Check if this position has an opponent's piece
+            const isOpponentPiece = (this.gameState.currentPlayer === 'W' && position.classList.contains('black')) ||
+                                   (this.gameState.currentPlayer === 'B' && position.classList.contains('white'));
+            
+            if (isOpponentPiece) {
                 position.style.cursor = 'pointer';
                 position.addEventListener('click', async () => {
                     try {
@@ -337,22 +359,32 @@ class SixMensMorrisUI {
                         });
 
                         if (response.ok) {
-                            await this.updateGameState();
-                            this.updateBoardDisplay();
-                            this.updateButtonStates();
-                            
-                            // Check for win
-                            const win = await this.checkWin();
-                            if (win) {
-                                this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} wins!`, 'success');
+                            const success = await response.json();
+                            if (success) {
+                                console.log('Piece removal successful');
+                                
+                                // Update game state (backend already switched player)
+                                await this.updateGameState();
+                                console.log('Game state updated');
                                 this.updateBoardDisplay();
-                                return;
+                                console.log('Board display updated');
+                                this.updateButtonStates();
+                                
+                                // Check for win
+                                const win = await this.checkWin();
+                                if (win) {
+                                    this.showMessage(`${this.gameState.currentPlayer === 'W' ? 'White' : 'Black'} wins!`, 'success');
+                                    this.updateBoardDisplay();
+                                    return;
+                                }
+                                
+                                console.log(`After mill removal, current player: ${this.gameState.currentPlayer}`);
+                                
+                                // Clear any mill removal state and reset board interactions
+                                this.clearMillRemovalState();
+                            } else {
+                                this.showMessage('Invalid piece to remove. Try again.', 'error');
                             }
-                            
-                            // Switch player
-                            await fetch('/switch', { method: 'POST' });
-                            this.gameState.currentPlayer = this.gameState.currentPlayer === 'W' ? 'B' : 'W';
-                            this.updateUI();
                         } else {
                             this.showMessage('Invalid piece to remove. Try again.', 'error');
                         }
@@ -425,6 +457,7 @@ class SixMensMorrisUI {
             const board = await boardResponse.json();
             
             console.log('Updating board display with', this.boardPositions.length, 'positions');
+            console.log('Board state from server:', board);
             
             // Update each position on the board
             this.boardPositions.forEach((position, index) => {
@@ -432,27 +465,34 @@ class SixMensMorrisUI {
                 const y = parseInt(position.dataset.y);
                 const piece = board[y][x];
                 
+                console.log(`Position (${x}, ${y}): piece = ${piece}`);
+                
                 // Reset classes
                 position.className = 'board-element node';
                 position.textContent = '';
                 
                 if (piece === 'W') {
                     position.classList.add('white');
-                    position.textContent = 'W';
+                    position.textContent = '';
+                    console.log(`Added white piece at (${x}, ${y})`);
                 } else if (piece === 'B') {
                     position.classList.add('black');
-                    position.textContent = 'B';
+                    position.textContent = '';
+                    console.log(`Added black piece at (${x}, ${y})`);
                 } else {
                     position.classList.add('valid');
+                    console.log(`Position (${x}, ${y}) is empty`);
                 }
                 
-                // Clear any temporary event listeners
+                // Clear any temporary event listeners and re-add them
                 const newPosition = position.cloneNode(true);
                 position.parentNode.replaceChild(newPosition, position);
                 this.boardPositions[index] = newPosition;
                 
                 // Re-add event listeners
                 newPosition.addEventListener('click', () => this.handlePositionClick(x, y));
+                
+                console.log(`Updated position (${x}, ${y}) with classes: ${newPosition.className}`);
             });
             
             // Update selection if needed
@@ -473,6 +513,16 @@ class SixMensMorrisUI {
     clearSelection() {
         this.selectedPosition = null;
         this.updateBoardDisplay();
+    }
+
+    clearMillRemovalState() {
+        console.log('Clearing mill removal state');
+        // Remove any temporary event listeners and reset cursor styles
+        this.boardPositions.forEach(position => {
+            position.style.cursor = 'pointer';
+            // Don't clone here as it might interfere with board display
+            // Just remove any temporary styling
+        });
     }
 
     updateUI() {

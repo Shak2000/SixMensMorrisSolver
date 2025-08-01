@@ -92,8 +92,8 @@ header h1 {
 }
 
 .board-element.node.white {
-    color: #ffffff;
-    background: #343a40;
+    background: #ffffff;
+    border: 2px solid #343a40;
     border-radius: 50%;
     width: 30px;
     height: 30px;
@@ -103,8 +103,7 @@ header h1 {
 }
 
 .board-element.node.black {
-    color: #343a40;
-    background: #ffffff;
+    background: #343a40;
     border: 2px solid #343a40;
     border-radius: 50%;
     width: 30px;

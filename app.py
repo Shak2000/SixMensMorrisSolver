@@ -33,12 +33,30 @@ async def switch():
 
 @app.post("/place")
 async def place(x: int, y: int):
-    game.place(x, y)
+    success = game.place(x, y)
+    if success:
+        # Check for mill formation
+        if game.check_mill(x, y, game.player):
+            # Don't switch player yet - let the frontend handle mill removal
+            pass
+        else:
+            # No mill formed, switch player
+            game.switch()
+    return success
 
 
 @app.post("/move")
 async def move(x: int, y: int, nx: int, ny: int):
-    game.move(x, y, nx, ny)
+    success = game.move(x, y, nx, ny)
+    if success:
+        # Check for mill formation
+        if game.check_mill(nx, ny, game.player):
+            # Don't switch player yet - let the frontend handle mill removal
+            pass
+        else:
+            # No mill formed, switch player
+            game.switch()
+    return success
 
 
 @app.get("/get_piece_count")
@@ -58,7 +76,11 @@ async def get_opponent_pieces(player: str):
 
 @app.post("/remove_piece")
 async def remove_piece(x: int, y: int, player: str):
-    game.remove_piece(x, y, player)
+    success = game.remove_piece(x, y, player)
+    if success:
+        # Switch to the opponent (the one who lost their piece)
+        game.switch()
+    return success
 
 
 @app.get("/check_win")
