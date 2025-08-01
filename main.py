@@ -254,6 +254,204 @@ class Game:
             return True
         return False
 
+    def copy(self):
+        """Create a deep copy of the game state"""
+        game_copy = Game()
+        game_copy.board = [[self.board[i][j] for j in range(5)] for i in range(5)]
+        game_copy.player = self.player
+        game_copy.placed = self.placed
+        game_copy.white = self.white
+        game_copy.black = self.black
+        game_copy.removed_white = self.removed_white
+        game_copy.removed_black = self.removed_black
+        game_copy.history = []
+        game_copy.game_active = self.game_active
+        return game_copy
+
+    def evaluate(self):
+        """Evaluate the current board state for minimax"""
+        # Check for wins first (highest weight)
+        if self.check_win():
+            if self.player == 'W':
+                return 10000  # White wins
+            else:
+                return -10000  # Black wins
+        
+        # Count pieces (medium weight)
+        piece_score = (self.white - self.black) * 100
+        
+        # Count unblocked 2-in-a-rows (lower weight)
+        white_twos = self.count_unblocked_twos('W')
+        black_twos = self.count_unblocked_twos('B')
+        two_score = (white_twos - black_twos) * 10
+        
+        return piece_score + two_score
+
+    def count_unblocked_twos(self, player):
+        """Count unblocked 2-in-a-rows for a player"""
+        count = 0
+        for line in self.lines:
+            player_count = 0
+            empty_count = 0
+            for x, y in line:
+                if self.board[y][x] == player:
+                    player_count += 1
+                elif self.board[y][x] == '*':
+                    empty_count += 1
+            
+            # If player has 2 pieces and 1 empty space, it's an unblocked 2-in-a-row
+            if player_count == 2 and empty_count == 1:
+                count += 1
+        return count
+
+    def get_valid_moves_for_player(self, player):
+        """Get all valid moves for a specific player"""
+        moves = []
+        
+        if self.placed < 12:
+            # Placement phase
+            for x, y in self.adjacent.keys():
+                if self.board[y][x] == '*':
+                    moves.append(('place', x, y))
+        else:
+            # Movement phase
+            piece_count = self.get_piece_count(player)
+            for y in range(5):
+                for x in range(5):
+                    if self.board[y][x] == player:
+                        if piece_count > 3:
+                            # Must move to adjacent positions
+                            for nx, ny in self.adjacent.get((x, y), []):
+                                if self.board[ny][nx] == '*':
+                                    moves.append(('move', x, y, nx, ny))
+                        else:
+                            # Can move to any empty position
+                            for ny in range(5):
+                                for nx in range(5):
+                                    if self.board[ny][nx] == '*' and (nx, ny) in self.adjacent:
+                                        moves.append(('move', x, y, nx, ny))
+        return moves
+
+    def minimax(self, depth, alpha, beta, maximizing_player):
+        """Minimax algorithm with alpha-beta pruning"""
+        if depth == 0 or self.check_win() or not self.has_valid_moves(self.player):
+            return self.evaluate()
+        
+        if maximizing_player:
+            max_eval = float('-inf')
+            for move in self.get_valid_moves_for_player('W'):
+                game_copy = self.copy()
+                if move[0] == 'place':
+                    game_copy.place(move[1], move[2])
+                else:
+                    game_copy.move(move[1], move[2], move[3], move[4])
+                
+                # Check for mill formation and removal
+                if move[0] == 'place' and game_copy.check_mill(move[1], move[2], 'W'):
+                    # Find best removal move
+                    best_removal = None
+                    best_removal_eval = float('-inf')
+                    for rx, ry in game_copy.get_opponent_pieces('W'):
+                        removal_copy = game_copy.copy()
+                        removal_copy.remove_piece(rx, ry, 'W')
+                        eval_score = removal_copy.evaluate()
+                        if eval_score > best_removal_eval:
+                            best_removal_eval = eval_score
+                            best_removal = (rx, ry)
+                    
+                    if best_removal:
+                        game_copy.remove_piece(best_removal[0], best_removal[1], 'W')
+                
+                game_copy.switch()
+                eval_score = game_copy.minimax(depth - 1, alpha, beta, False)
+                max_eval = max(max_eval, eval_score)
+                alpha = max(alpha, eval_score)
+                if beta <= alpha:
+                    break
+            return max_eval
+        else:
+            min_eval = float('inf')
+            for move in self.get_valid_moves_for_player('B'):
+                game_copy = self.copy()
+                if move[0] == 'place':
+                    game_copy.place(move[1], move[2])
+                else:
+                    game_copy.move(move[1], move[2], move[3], move[4])
+                
+                # Check for mill formation and removal
+                if move[0] == 'place' and game_copy.check_mill(move[1], move[2], 'B'):
+                    # Find best removal move
+                    best_removal = None
+                    best_removal_eval = float('inf')
+                    for rx, ry in game_copy.get_opponent_pieces('B'):
+                        removal_copy = game_copy.copy()
+                        removal_copy.remove_piece(rx, ry, 'B')
+                        eval_score = removal_copy.evaluate()
+                        if eval_score < best_removal_eval:
+                            best_removal_eval = eval_score
+                            best_removal = (rx, ry)
+                    
+                    if best_removal:
+                        game_copy.remove_piece(best_removal[0], best_removal[1], 'B')
+                
+                game_copy.switch()
+                eval_score = game_copy.minimax(depth - 1, alpha, beta, True)
+                min_eval = min(min_eval, eval_score)
+                beta = min(beta, eval_score)
+                if beta <= alpha:
+                    break
+            return min_eval
+
+    def get_best_move(self, depth):
+        """Get the best move for the current player using minimax"""
+        best_move = None
+        best_eval = float('-inf') if self.player == 'W' else float('inf')
+        
+        moves = self.get_valid_moves_for_player(self.player)
+        
+        for move in moves:
+            game_copy = self.copy()
+            best_removal = None  # Initialize best_removal for each move
+            
+            if move[0] == 'place':
+                game_copy.place(move[1], move[2])
+            else:
+                game_copy.move(move[1], move[2], move[3], move[4])
+            
+            # Check for mill formation and removal
+            if move[0] == 'place' and game_copy.check_mill(move[1], move[2], self.player):
+                # Find best removal move
+                best_removal_eval = float('-inf') if self.player == 'W' else float('inf')
+                for rx, ry in game_copy.get_opponent_pieces(self.player):
+                    removal_copy = game_copy.copy()
+                    removal_copy.remove_piece(rx, ry, self.player)
+                    eval_score = removal_copy.evaluate()
+                    if self.player == 'W':
+                        if eval_score > best_removal_eval:
+                            best_removal_eval = eval_score
+                            best_removal = (rx, ry)
+                    else:
+                        if eval_score < best_removal_eval:
+                            best_removal_eval = eval_score
+                            best_removal = (rx, ry)
+                
+                if best_removal:
+                    game_copy.remove_piece(best_removal[0], best_removal[1], self.player)
+            
+            game_copy.switch()
+            eval_score = game_copy.minimax(depth - 1, float('-inf'), float('inf'), self.player == 'B')
+            
+            if self.player == 'W':
+                if eval_score > best_eval:
+                    best_eval = eval_score
+                    best_move = (move, best_removal)
+            else:
+                if eval_score < best_eval:
+                    best_eval = eval_score
+                    best_move = (move, best_removal)
+        
+        return best_move
+
     def display_board(self):
         """Display the current board state using the visual representation"""
         print("\nCurrent Board:")
@@ -341,10 +539,11 @@ def main():
         else:
             game.display_board()
             print("\n1. Take an action")
-            print("2. Undo an action")
-            print("3. Restart the game")
-            print("4. Quit")
-            choice = input("Enter your choice (1-4): ").strip()
+            print("2. Computer plays a move")
+            print("3. Undo an action")
+            print("4. Restart the game")
+            print("5. Quit")
+            choice = input("Enter your choice (1-5): ").strip()
             
             if choice == '1':
                 # Take an action
@@ -399,22 +598,72 @@ def main():
                         print("Invalid move. Try again.")
                         
             elif choice == '2':
+                # Computer plays a move
+                try:
+                    depth = int(input("Enter minimax depth for this turn: "))
+                    if depth <= 0:
+                        print("Depth must be positive.")
+                        continue
+                except ValueError:
+                    print("Please enter a valid number.")
+                    continue
+                
+                print(f"Computer ({game.player}) is thinking...")
+                best_move = game.get_best_move(depth)
+                
+                if best_move:
+                    move, removal = best_move
+                    if move[0] == 'place':
+                        x, y = move[1], move[2]
+                        if game.place(x, y):
+                            print(f"Computer placed piece at ({x}, {y})")
+                            if game.check_mill(x, y, game.player):
+                                if removal:
+                                    rx, ry = removal
+                                    game.remove_piece(rx, ry, game.player)
+                                    print(f"Computer removed opponent piece at ({rx}, {ry})")
+                        else:
+                            print("Computer made an invalid move.")
+                            continue
+                    else:
+                        sx, sy, dx, dy = move[1], move[2], move[3], move[4]
+                        if game.move(sx, sy, dx, dy):
+                            print(f"Computer moved piece from ({sx}, {sy}) to ({dx}, {dy})")
+                            if game.check_mill(dx, dy, game.player):
+                                if removal:
+                                    rx, ry = removal
+                                    game.remove_piece(rx, ry, game.player)
+                                    print(f"Computer removed opponent piece at ({rx}, {ry})")
+                        else:
+                            print("Computer made an invalid move.")
+                            continue
+                    
+                    # Check for win
+                    if game.placed >= 12 and game.check_win():
+                        print(f"{game.player} wins!")
+                        game.game_active = False
+                    else:
+                        game.switch()
+                else:
+                    print("Computer couldn't find a valid move.")
+                    
+            elif choice == '3':
                 if game.undo():
                     game.switch()  # Switch back to previous player
                     print("Action undone.")
                 else:
                     print("No actions to undo.")
                     
-            elif choice == '3':
+            elif choice == '4':
                 game.start()
                 print("Game restarted!")
                 
-            elif choice == '4':
+            elif choice == '5':
                 print("Goodbye!")
                 break
                 
             else:
-                print("Invalid choice. Please enter 1-4.")
+                print("Invalid choice. Please enter 1-5.")
 
 
 if __name__ == "__main__":
