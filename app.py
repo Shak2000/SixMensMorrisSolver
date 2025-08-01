@@ -83,7 +83,7 @@ async def get_unblocked_two_in_a_rows(player: str):
 
 @app.get("/evaluate")
 async def evaluate():
-    return game.evaluate_for_player()
+    return game.evaluate()
 
 
 @app.get("/minimax")
@@ -99,3 +99,31 @@ async def computer_move(depth: int):
 @app.post("/remove_best_opponent_piece")
 async def remove_best_opponent_piece(depth: int):
     game.remove_best_opponent_piece(depth)
+
+
+@app.get("/get_board")
+async def get_board():
+    return game.board
+
+
+@app.get("/get_current_player")
+async def get_current_player():
+    return game.player
+
+
+@app.get("/get_placed_count")
+async def get_placed_count():
+    return game.placed
+
+
+@app.get("/get_game_active")
+async def get_game_active():
+    return game.game_active
+
+
+@app.get("/get_removed_count")
+async def get_removed_count(player: str):
+    if player == 'W':
+        return game.removed_white
+    else:
+        return game.removed_black
